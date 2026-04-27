@@ -1,0 +1,81 @@
+# tkinter - библиотека для оконных приложений
+import tkinter as tk
+from tkinter import filedialog  # модуль с функциями для работы с файламиimport pandas as pd
+import os
+import pandas as pd
+from scipy.stats import chi2
+from scipy.stats import chisquare
+
+
+# Скрываем главное окно (чтобы оно не мелькало)
+root = tk.Tk()  # создаём главное (серое) окно, без него не сработает filedialog
+root.withdraw()  # прячет это окно, чтобы не мешало пользователю
+
+# Открываем диалог выбора файла
+file_path = filedialog.askopenfilename(
+    title="Выберите Excel файл",
+    filetypes=[("Excel files", "*.xlsx *.xls"), ("All files", "*.*")]
+)
+# askopenfilename: ask = cпрашивает, open = открывает, filename = возвращает путь
+# title - заголовок окна
+# filetypes - фильтр типов файлов. * - любые символы
+if file_path:
+    # Читаем файл с помощью pandas
+    df = pd.read_excel(file_path)
+    df_memory = df.copy()
+    print(f"файл '{file_path}' успешно загружен!")
+else:
+    print("выбор файла был отменён.")
+
+# мы выбираем из 1 столбца?
+gen = input('введите название столбца с генотипами: ')
+a, b, c = input('введите через пробел символы гомозиготы, гетерозиготы и второй гомозиготы так, как они обозначены в таблице (пример: GG GC CC): ').split()
+
+count_columns = int(input('сколько столбцов вы будете анализировать: '))
+for i in range(count_columns):
+    axis = input(f'введите название выбираемого столбца №{i+1} ')
+    count_groups = int(input(f'сколько групп вы хотите исключить из столбца {axis}: '))
+    if count_groups != 0:
+        for j in range(count_groups):
+            group = input('введите название группы исключения №{j+1}: ')
+            df = df[df[axis] != group]
+
+# известные частоты аллелей в популяции
+G_pop = float(input('введите распространённость аллели 1 в популяции в долях (округлите до десятых): '))
+C_pop = float(input('введите распространённость аллели 2 в популяции в долях (округлите до десятых): '))
+if G_pop + C_pop != 1:  # пока подумаем
+    print('ошибка, повторите ввод')
+    G_pop = float(input('введите распространённость аллели 1 в популяции: '))
+    C_pop = float(input('введите распространённость аллели 2 в популяции: '))
+
+# наблюдаемое количество генотипов GG, GC и СС
+n_GG = df[gen].value_counts()[a]
+n_GC = df[gen].value_counts()[b]
+n_CC = df[gen].value_counts()[c]
+N = n_GG + n_GC + n_CC
+observed = [n_GG, n_GC, n_CC]
+# ожидаемое количество генотипов по частотам аллелей из популяции
+exp_GG = N * (G_pop) ** 2
+exp_GC = N * (2 * (G_pop) * (C_pop))
+exp_CC = N * (C_pop) ** 2
+
+expected = [exp_GG, exp_GC, exp_CC]
+
+# считаем chi2 и p-value
+# ddof - степени свободы
+chi2_stat, p_value = chisquare(observed, expected, ddof=1)
+chi_critical = chi2.ppf(0.95, df=1)
+
+if chi2_stat > chi_critical:
+    print('аллель соответсвует аллелю в гомозиготе 1, аллель 2 соответсвует аллелю в гомозиготе 2')
+    print('не соответствует раcпределению Харди-Вайнберга')
+    print(f'количество гомозигот по аллелю 1: {n_GG}')
+    print(f'количество гетерозигот: {n_GC}')
+    print(f'количество гомозигот по аллелю 2: {n_CC}')
+    print(f'из таблицы удалено {len(df_memory) - len(df)} пациентов')
+else:
+    print('соответствует раcпределению Харди-Вайнберга')
+    print(f'количество гомозигот по аллелю 1: {n_GG}')
+    print(f'количество гетерозигот: {n_GC}')
+    print(f'количество гомозигот по аллелю 2: {n_CC}')
+    print(f'из таблицы удалено {len(df_memory) - len(df)} пациентов')
